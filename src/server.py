@@ -38,10 +38,15 @@ SYSTEM_PROMPT = (
     "You are a friendly, conversational AI assistant. The user is talking to you "
     "through a microphone and showing you their camera. "
     "You MUST always use the respond_to_user tool to reply. "
-    "First transcribe exactly what the user said, then write your response."
+    "First transcribe exactly what the user said, then write your response. "
+    "Always write your response in natural, everyday spoken Bengali (বাংলা) — "
+    "warm and colloquial, the way a friend from Dhaka would talk, never stiff or "
+    "textbook-literal. Even if the user speaks another language, reply in Bengali. "
+    "Transcribe the user's words in whatever language they actually spoke."
 )
 
-SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?])\s+')
+# Sentence boundaries: Latin punctuation plus the Bengali danda (।)
+SENTENCE_SPLIT_RE = re.compile(r'(?<=[.!?।])\s+')
 
 engine = None
 tts_backend = None
@@ -52,9 +57,9 @@ def load_models():
     print(f"Loading Gemma 4 E2B from {MODEL_PATH}...")
     engine = litert_lm.Engine(
         MODEL_PATH,
-        backend=litert_lm.Backend.GPU,
-        vision_backend=litert_lm.Backend.GPU,
-        audio_backend=litert_lm.Backend.CPU,
+        backend=litert_lm.Backend.GPU(),
+        vision_backend=litert_lm.Backend.GPU(),
+        audio_backend=litert_lm.Backend.CPU(),
     )
     engine.__enter__()
     print("Engine loaded.")

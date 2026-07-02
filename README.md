@@ -1,8 +1,10 @@
-# Parlor
+# Parlor · পার্লার
 
 On-device, real-time multimodal AI. Have natural voice and vision conversations with an AI that runs entirely on your machine.
 
 Parlor uses [Gemma 4 E2B](https://huggingface.co/google/gemma-4-E2B-it) for understanding speech and vision, and [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) for text-to-speech. You talk, show your camera, and it talks back, all locally.
+
+**This fork is localized for Bengali (বাংলা):** the UI, the AI's conversation language, and the voice output are all Bengali. It ships with two interchangeable backends — the original on-device Python server, and a new [Node.js backend](#bengali-port-nodejs-backend) that runs anywhere (including Windows) using free cloud APIs. See [Bengali port](#bengali-port-nodejs-backend) below.
 
 https://github.com/user-attachments/assets/cb0ffb2e-f84f-48e7-872c-c5f7b5c6d51f
 
@@ -60,12 +62,36 @@ Open [http://localhost:8000](http://localhost:8000), grant camera and microphone
 
 Models are downloaded automatically on first run (~2.6 GB for Gemma 4 E2B, plus TTS models).
 
+> **Note on Bengali:** the Python backend now prompts Gemma to converse in Bengali, but its Kokoro TTS has no Bengali voice — spoken output quality will be poor. For a fully Bengali experience use the Node.js backend below.
+
+## Bengali port (Node.js backend)
+
+`node/server.js` speaks the exact same WebSocket protocol as the Python server and serves the same frontend, but swaps the on-device models for free hosted services, so it runs on any OS with Node 18+ and no GPU:
+
+- **LLM (speech + vision):** [Gemini API](https://ai.google.dev/) free tier — a single multimodal call handles audio transcription, image understanding, and the Bengali reply.
+- **TTS:** Microsoft Edge's public text-to-speech (via [msedge-tts](https://www.npmjs.com/package/msedge-tts)) with the Bengali voice `bn-BD-NabanitaNeural`. Free, no API key.
+
+```bash
+cd node
+npm install
+
+# Get a free key at https://aistudio.google.com/apikey
+echo "GEMINI_API_KEY=your-key-here" > ../.env
+
+npm start
+```
+
+Open [http://localhost:8000](http://localhost:8000). Without a key the server still runs — the assistant will tell you (in Bengali, out loud) how to finish setup.
+
 ## Configuration
 
-| Variable     | Default                        | Description                                    |
-| ------------ | ------------------------------ | ---------------------------------------------- |
-| `MODEL_PATH` | auto-download from HuggingFace | Path to a local `gemma-4-E2B-it.litertlm` file |
-| `PORT`       | `8000`                         | Server port                                    |
+| Variable         | Default                        | Used by | Description                                    |
+| ---------------- | ------------------------------ | ------- | ---------------------------------------------- |
+| `GEMINI_API_KEY` | —                              | Node    | Gemini API key (free tier works)               |
+| `GEMINI_MODEL`   | `gemini-2.5-flash`             | Node    | Gemini model name                              |
+| `TTS_VOICE`      | `bn-BD-NabanitaNeural`         | Node    | Edge TTS voice (`bn-BD-*` / `bn-IN-*`)         |
+| `MODEL_PATH`     | auto-download from HuggingFace | Python  | Path to a local `gemma-4-E2B-it.litertlm` file |
+| `PORT`           | `8000`                         | both    | Server port                                    |
 
 ## Performance (Apple M3 Pro)
 
@@ -82,13 +108,16 @@ Decode speed: ~83 tokens/sec on GPU (Apple M3 Pro).
 
 ```
 src/
-├── server.py              # FastAPI WebSocket server + Gemma 4 inference
+├── server.py              # FastAPI WebSocket server + Gemma 4 inference (on-device)
 ├── tts.py                 # Platform-aware TTS (MLX on Mac, ONNX on Linux)
-├── index.html             # Frontend UI (VAD, camera, audio playback)
+├── index.html             # Frontend UI in Bengali (VAD, camera, audio playback) — shared by both backends
 ├── pyproject.toml         # Dependencies
 └── benchmarks/
     ├── bench.py           # End-to-end WebSocket benchmark
     └── benchmark_tts.py   # TTS backend comparison
+node/
+├── server.js              # Node.js backend: Gemini API + Edge TTS (Bengali voice)
+└── package.json           # Dependencies (ws, msedge-tts, dotenv)
 ```
 
 ## Acknowledgments

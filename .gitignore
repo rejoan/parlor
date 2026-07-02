@@ -1,3 +1,9 @@
+# Node
+node_modules/
+
+# Secrets
+.env
+
 # Python
 __pycache__/
 *.py[oc]
@@ -20,3 +26,7 @@ default.profraw
 # IDE
 .idea/
 .vscode/
+/NodeJsApplication/nbproject/private/
+/parlor/nbproject/private/
+/node/node_parl/nbproject/private/
+/node/nbproject/private/

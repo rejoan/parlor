@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="bn">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Parlor</title>
+<title>পার্লার — বাংলা ভয়েস এআই</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Noto+Sans+Bengali:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
 <style>
   :root {
     --c-bg: #050509;
@@ -30,8 +30,8 @@
     --glow: var(--c-loading);
     --glow-dim: var(--c-loading-dim);
 
-    --font-body: 'Instrument Sans', system-ui, sans-serif;
-    --font-display: 'Syne', system-ui, sans-serif;
+    --font-body: 'Instrument Sans', 'Noto Sans Bengali', system-ui, sans-serif;
+    --font-display: 'Syne', 'Noto Sans Bengali', system-ui, sans-serif;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -418,10 +418,10 @@
 <header>
   <div class="logo">
     <div class="logo-mark"></div>
-    <h1>Parlor</h1>
+    <h1>পার্লার</h1>
   </div>
   <span class="model-label">Gemma 4 E2B</span>
-  <div id="status" class="status-pill disconnected">Disconnected</div>
+  <div id="status" class="status-pill disconnected">সংযোগ বিচ্ছিন্ন</div>
 </header>
 
 <div class="portal-stack">
@@ -441,14 +441,14 @@
 
   <!-- Controls -->
   <div class="controls">
-    <button id="cameraToggle" class="ctrl-btn active">Camera On</button>
+    <button id="cameraToggle" class="ctrl-btn active">ক্যামেরা চালু</button>
     <div class="state-indicator">
       <div id="stateDot" class="dot loading"></div>
-      <span id="stateText">Loading...</span>
+      <span id="stateText">লোড হচ্ছে…</span>
     </div>
     <span class="on-device-pill">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="12" height="9" rx="2"/><path d="M5 4V3a3 3 0 0 1 6 0v1"/></svg>
-      On-device
+      অন-ডিভাইস
     </span>
   </div>
 </div>
@@ -567,7 +567,7 @@ function setState(newState) {
 
   // Update state indicator
   stateDot.className = `dot ${newState}`;
-  const labels = { loading: 'Loading...', listening: 'Listening', processing: 'Thinking...', speaking: 'Speaking' };
+  const labels = { loading: 'লোড হচ্ছে…', listening: 'শুনছি', processing: 'ভাবছি…', speaking: 'বলছি' };
   stateText.textContent = labels[newState] || newState;
 
   // Update viewport glow class
@@ -613,11 +613,11 @@ function setState(newState) {
 function connect() {
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   ws.onopen = () => {
-    setStatus('connected', 'Connected');
+    setStatus('connected', 'সংযুক্ত');
     if (state !== 'loading') setState('listening');
   };
   ws.onclose = () => {
-    setStatus('disconnected', 'Disconnected');
+    setStatus('disconnected', 'সংযোগ বিচ্ছিন্ন');
     setTimeout(connect, 2000);
   };
   ws.onmessage = ({ data }) => {
@@ -638,7 +638,7 @@ function connect() {
       startStreamPlayback();
     } else if (msg.type === 'audio_chunk') {
       if (ignoreIncomingAudio) return;
-      queueAudioChunk(msg.audio);
+      queueAudioChunk(msg.audio, msg.format);
     } else if (msg.type === 'audio_end') {
       if (ignoreIncomingAudio) {
         ignoreIncomingAudio = false;
@@ -714,8 +714,8 @@ function handleSpeechEnd(audio) {
   const imageBase64 = captureFrame();
 
   setState('processing');
-  setStatus('processing', 'Processing');
-  addMessage('user', '<span class="loading-dots"><span></span><span></span><span></span></span>', imageBase64 ? 'with camera' : '');
+  setStatus('processing', 'প্রসেস হচ্ছে');
+  addMessage('user', '<span class="loading-dots"><span></span><span></span><span></span></span>', imageBase64 ? 'ক্যামেরাসহ' : '');
 
   const payload = { audio: wavBase64 };
   if (imageBase64) payload.image = imageBase64;
@@ -768,21 +768,36 @@ function startStreamPlayback() {
   setState('speaking');
 }
 
-function queueAudioChunk(base64Pcm) {
+let decodeQueue = Promise.resolve();
+
+function queueAudioChunk(base64Audio, format) {
   ensureAudioCtx();
 
-  // Decode base64 -> Int16 PCM -> Float32
-  const bin = atob(base64Pcm);
+  const bin = atob(base64Audio);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+
+  if (format === 'mp3') {
+    // Compressed chunk (Node backend fallback) — decode natively, in order
+    decodeQueue = decodeQueue
+      .then(() => audioCtx.decodeAudioData(bytes.buffer))
+      .then(buf => scheduleBuffer(buf))
+      .catch(e => console.warn('Audio decode failed:', e));
+    return;
+  }
+
+  // Raw Int16 PCM -> Float32
   const int16 = new Int16Array(bytes.buffer);
   const float32 = new Float32Array(int16.length);
   for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
 
-  // Create AudioBuffer and schedule it
   const audioBuffer = audioCtx.createBuffer(1, float32.length, streamSampleRate);
   audioBuffer.getChannelData(0).set(float32);
+  scheduleBuffer(audioBuffer);
+}
 
+function scheduleBuffer(audioBuffer) {
+  if (state !== 'speaking') return; // barge-in happened while decoding
   const source = audioCtx.createBufferSource();
   source.buffer = audioBuffer;
   source.connect(audioCtx.destination);
@@ -804,7 +819,7 @@ function queueAudioChunk(base64Pcm) {
     if (streamSources.length === 0 && state === 'speaking') {
       currentSource = null;
       setState('listening');
-      setStatus('connected', 'Connected');
+      setStatus('connected', 'সংযুক্ত');
     }
   };
 }
@@ -821,7 +836,7 @@ function addMessage(role, text, meta) {
 cameraToggle.addEventListener('click', () => {
   cameraEnabled = !cameraEnabled;
   cameraToggle.classList.toggle('active', cameraEnabled);
-  cameraToggle.textContent = cameraEnabled ? 'Camera On' : 'Camera Off';
+  cameraToggle.textContent = cameraEnabled ? 'ক্যামেরা চালু' : 'ক্যামেরা বন্ধ';
   video.style.opacity = cameraEnabled ? 1 : 0.3;
 });
 
